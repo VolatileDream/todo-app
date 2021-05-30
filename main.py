@@ -119,15 +119,15 @@ def list_insert_item(id, prev, next, s):
     # Sanity check
     if prev is not None:
       c.execute("SELECT next FROM Items WHERE rowid = ?;", (prev,))
-      prev_row = row_or_404(c)
-      if prev_row[0] != next:
-        abort(400, "Non adjacent insertion!")
+      prev_row_next, = row_or_404(c)
+      if prev_row_next != next:
+        abort(400, "Non adjacent insertion (prev)!")
 
     if next is not None:
       c.execute("SELECT prev FROM Items WHERE rowid = ?;", (next,))
-      next_row = row_or_404(c)
-      if next_row[0] != prev:
-        abort(400, "Non adjacent insertion!")
+      next_row_prev, = row_or_404(c)
+      if next_row_prev != prev:
+        abort(400, "Non adjacent insertion (next)!")
 
     if prev is not None:
       c.execute("UPDATE Items SET next = ? WHERE rowid = ?;", (id, prev))

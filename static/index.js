@@ -1,3 +1,6 @@
+var _todos;
+var _todoMap;
+
 // Wrap $.ajax just a little to be more convenient.
 var req = function(settings) {
   if (settings['data']) {
@@ -8,14 +11,20 @@ var req = function(settings) {
   return $.ajax(settings)
 }
 
+function strip_prev_next(t) {
+  delete t["next"]
+  delete t["prev"]
+  return t;
+}
+
 // API
 var API = {
   add : function(content) {
-    return req({
+    return strip_prev_next(req({
       method: 'POST',
       url: '/api/add',
       data: { content: content },
-    }).responseJSON;
+    })).responseJSON;
   },
   list : function() {
     var response = req({
@@ -33,28 +42,37 @@ var API = {
     var next = response.first;
     while (next) {
       t = todos[next];
-      items.push(t);
       next = t.next;
+      items.push(strip_prev_next(t));
     }
     return items;
   },
-  update: function(todo) {
-    return req({
+  done: function(todo) {
+    // Don't provide prev/next, because we don't have to.
+    return strip_prev_next(req({
       method: 'POST',
       url: '/api/update/' + todo.id,
       data: {
         content: todo.content,
         done: todo.done,
+      },
+    })).responseJSON;
+  },
+  move: function(todo) {
+    return strip_prev_next(req({
+      method: 'POST',
+      url: '/api/update/' + todo.id,
+      data: {
         prev: todo.prev,
         next: todo.next,
       },
-    }).responseJSON;
+    })).responseJSON;
   },
   rm : function(id) {
-    return req({
+    return strip_prev_next(req({
       method: 'POST',
       url: '/api/delete/' + id,
-    }).responseJSON;
+    })).responseJSON;
   },
 };
 
@@ -63,10 +81,6 @@ function indexIdOrNull(items, index) {
     return items[index].id
   }
   return null;
-}
-
-function moveTodo(prev, current) {
-  console.log(prev, current);
 }
 
 function toggleListItem(li) {
@@ -131,8 +145,8 @@ $(document).ready(function() {
     err.addClass("hidden");
   });
 
-  var _todos = [];
-  var _todoMap = {};
+  _todos = [];
+  _todoMap = {};
 
   function todo_add(todo) {
     console.log("adding todo:", todo);
@@ -148,6 +162,7 @@ $(document).ready(function() {
 
     noItems.addClass("hidden");
     todoList.append(html);
+
     _todos.push(todo);
     _todoMap[todo.id] = todo;
 
@@ -173,19 +188,43 @@ $(document).ready(function() {
       .attr("placeholder", "✍️ Add item...")
       .focus();
   };
-  function todo_update(todoLI, update_fn) {
+  function todo_done(todoLI) {
     var id = liID(todoLI);
     var todo = _todoMap[id];
-    console.log("updating:", id, todo)
-    update_fn(todo);
-    API.update(todo);
+
+    todo.done = !todo.done;
+    API.done(todo);
+
+    toggleListItem(todoLI);
+  };
+  function todo_move(todoLI, new_index) {
+    var id = liID(todoLI);
+    var todo = _todoMap[id];
+
+    var prev_index = _todos.indexOf(todo);
+    if (prev_index == new_index) {
+      return;
+    }
+
+    _todos.splice(prev_index, 1);
+    _todos.splice(new_index, 0, todo);
+
+    var move = {
+      id: todo.id,
+      prev: indexIdOrNull(_todos, new_index - 1),
+      next: indexIdOrNull(_todos, new_index + 1),
+    };
+
+    API.move(move);
   };
   function todo_rm(todoLI) {
     var id = liID(todoLI);
     var todo = _todoMap[id];
+    var index = _todos.indexOf(todo);
     API.rm(todo.id)
+
     delete _todoMap[todo.id];
-    _todos.splice(todo.index, 1);
+    _todos.splice(index, 1);
 
     var empty = _todos.length == 0;
 
@@ -215,10 +254,7 @@ $(document).ready(function() {
       .parent()
       .parent()
       .parent();
-    todo_update(li, function(todo) {
-      todo.done = !todo.done;
-    });
-    toggleListItem(li);
+    todo_done(li);
   });
 
   todoList.on("click", ".close", function() {
@@ -232,17 +268,7 @@ $(document).ready(function() {
   todoList.sortable({
     update: function(_event, ui) {
       var new_index = ui.item.index();
-
-      todo_update(ui.item, function(todo) {
-        // Find and move the todo in the list.
-        var prevIndex = _todos.indexOf(todo);
-        _todos.splice(prevIndex, 1);
-        _todos.splice(new_index, 0, todo);
-
-        // Update it's positioning information.
-        todo.prev = indexIdOrNull(_todos, new_index - 1);
-        todo.next = indexIdOrNull(_todos, new_index + 1);
-      });
+      todo_move(ui.item, new_index);
     },
   });
   todoList.disableSelection();

@@ -18,6 +18,18 @@ def index():
   return render_template('index.html')
 
 
+def as_int(val):
+  if val is None:
+    return None
+  return int(val)
+
+
+def str_id(id):
+  if id is None:
+    return None
+  return str(id)
+
+
 @app.route('/api/list')
 def list_todos():
   with storage() as s:
@@ -35,9 +47,15 @@ def list_todos():
         if prev is None:
           first_id = rowid
 
-        items.append({"rowid": rowid, "content": content, "done": done, "prev": prev, "next": next})
+        items.append({
+          "id": str_id(rowid),
+          "content": content,
+          "done": bool(done),
+          "prev": str_id(prev),
+          "next": str_id(next),
+        })
 
-      return {"todos":items, "first": first_id, "last": last_id}
+      return {"todos":items, "first": str_id(first_id), "last": str_id(last_id)}
       
 
 @app.route('/api/add', methods=['POST'])
@@ -59,7 +77,13 @@ def create_todo():
       if last_id is not None:
         c.execute("UPDATE Items SET next = ? WHERE rowid = ?;", (new_id, last_id))
 
-      return {"rowid": new_id, "content": content, "done": False, "prev": last_id, "next": None}
+      return {
+        "id": str_id(new_id),
+        "content": content,
+        "done": False,
+        "prev": str_id(last_id),
+        "next": str_id(None),
+      }
 
 
 def row_or_404(c):
@@ -78,6 +102,8 @@ def list_remove_item(id, s):
 
     prev, next = row
 
+    c.execute("UPDATE Items SET prev = ?, next = ? WHERE rowid = ?;", (None, None, id))
+
     if prev is not None:
       c.execute("UPDATE Items SET next = ? WHERE rowid = ?;", (next, prev))
     if next is not None:
@@ -95,19 +121,20 @@ def list_insert_item(id, prev, next, s):
       c.execute("SELECT next FROM Items WHERE rowid = ?;", (prev,))
       prev_row = row_or_404(c)
       if prev_row[0] != next:
-        raise Exception("Non adjacent insertion!")
+        abort(400, "Non adjacent insertion!")
 
     if next is not None:
       c.execute("SELECT prev FROM Items WHERE rowid = ?;", (next,))
       next_row = row_or_404(c)
       if next_row[0] != prev:
-        raise Exception("Non adjacent insertion!")
+        abort(400, "Non adjacent insertion!")
 
     if prev is not None:
       c.execute("UPDATE Items SET next = ? WHERE rowid = ?;", (id, prev))
     if next is not None:
       c.execute("UPDATE Items SET prev = ? WHERE rowid = ?;", (id, next))
 
+    c.execute("UPDATE Items SET prev = ?, next = ? WHERE rowid = ?;", (prev, next, id))
 
 @app.route('/api/update/<id>', methods=['POST'])
 def update_todo(id):
@@ -126,17 +153,23 @@ def update_todo(id):
       content = r.get("content", content)
       done = bool(r.get("done", done))
       # Need to detect if these change.
-      new_prev = int(r.get("prev", prev))
-      new_next = int(r.get("next", next))
+      new_prev = as_int(r.get("prev", prev))
+      new_next = as_int(r.get("next", next))
 
       c.execute("UPDATE Items SET content = ?, done = ? WHERE rowid = ?;", (content, done, id))
 
       if new_prev != prev or new_next != next:
         # the item was moved!
-        list_remove_item(id)
-        list_insert_item(id, new_prev, new_next)
+        list_remove_item(id, s)
+        list_insert_item(id, new_prev, new_next, s)
 
-      return {"rowid": id, "content": content, "done": done, "prev": new_prev, "next": new_next}
+      return {
+        "id": str_id(id),
+        "content": content,
+        "done": bool(done),
+        "prev": str_id(new_prev),
+        "next": str_id(new_next),
+      }
 
 
 @app.route('/api/delete/<id>', methods=['POST'])

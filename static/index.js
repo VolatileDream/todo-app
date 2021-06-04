@@ -76,11 +76,38 @@ var API = {
   },
 };
 
+var STORAGE = {
+  __generic: function(key, opt_val) {
+    if (opt_val === undefined) {
+      var result = localStorage[key];
+      if (result === undefined) {
+        return result;
+      }
+      return JSON.parse(result);
+    }
+    localStorage[key] = JSON.stringify(opt_val);
+    return opt_val;
+  },
+  default: function(storage_property, value) {
+    if (storage_property() === undefined) {
+      storage_property(value);
+    }
+  },
+  hide_done: function(opt_val) {
+    return STORAGE.__generic("hide-done", opt_val);
+  },
+};
+
 function indexIdOrNull(items, index) {
   if (0 <= index && index < items.length) {
     return items[index].id
   }
   return null;
+}
+
+function jittery_random(target_val, width) {
+  var min = target_val - width / 2;
+  return Math.random() * width + min;
 }
 
 function toggleListItem(li) {
@@ -145,10 +172,24 @@ $(document).ready(function() {
     err.addClass("hidden");
   });
 
+  var _page_refresh_timeout = {};
+  function watchdog() {
+    // Interactions with the app reset the page refresh.
+    // This makes sure that when someone starts editing on a long-lived page
+    // that it's not too far out of date.
+    clearTimeout(_page_refresh_timeout);
+    const timeout_mins = jittery_random(15, 5); // 15ish minutes.
+    _page_refresh_timeout = setTimeout(function () {
+      console.log("Interaction timeout, reloading page after a waiting:", Math.trunc(timeout_mins), " minutes.");
+      window.location.reload();
+    }, timeout_mins * 60 * 1000);
+  }
+
   _todos = [];
   _todoMap = {};
 
   function todo_add(todo) {
+    watchdog();
     console.log("adding todo:", todo);
     var cls = (todo.done ? "danger" : "");
     // id is prefixed with 'id-' to ensure no javascript integer parsing.
@@ -172,6 +213,7 @@ $(document).ready(function() {
     }, 500);
   };
   function todo_create() {
+    watchdog();
     var itemVal = formControl.val();
     if (itemVal === "") {
       err.removeClass("hidden").addClass("animated bounceIn");
@@ -189,6 +231,7 @@ $(document).ready(function() {
       .focus();
   };
   function todo_done(todoLI) {
+    watchdog();
     var id = liID(todoLI);
     var todo = _todoMap[id];
 
@@ -198,6 +241,7 @@ $(document).ready(function() {
     toggleListItem(todoLI);
   };
   function todo_move(todoLI, new_index) {
+    watchdog();
     var id = liID(todoLI);
     var todo = _todoMap[id];
 
@@ -218,6 +262,7 @@ $(document).ready(function() {
     API.move(move);
   };
   function todo_rm(todoLI) {
+    watchdog();
     var id = liID(todoLI);
     var todo = _todoMap[id];
     var index = _todos.indexOf(todo);
@@ -244,7 +289,14 @@ $(document).ready(function() {
     }
   });
 
+  // Setup the "done" control.
+  STORAGE.default(STORAGE.hide_done, false);
+  if (STORAGE.hide_done()) {
+    todoList.toggleClass("hide-done")
+    toggleListItem(doneControl);
+  }
   doneControl.on("click", 'input[type="checkbox"]', function() {
+    STORAGE.hide_done(!STORAGE.hide_done());
     todoList.toggleClass("hide-done")
     toggleListItem(doneControl);
   });
@@ -275,5 +327,6 @@ $(document).ready(function() {
 
   // Now to the actual setting of the UI the first time.
   API.list().forEach(todo_add);
+  watchdog();
 });
 

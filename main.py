@@ -177,7 +177,10 @@ def delete_todo(id):
   id = int(id)
   with storage() as s:
     list_remove_item(id, s)
-    s.execute("DELETE FROM Items WHERE rowid = ?;", (id,))
+    row = s.execute("SELECT content FROM Items WHERE rowid = ?;", (id,)).fetchone()
+    if row:
+      s.execute("INSERT INTO PreviousItems (content) VALUES (?);", (row[0],))
+      s.execute("DELETE FROM Items WHERE rowid = ?;", (id,))
 
   return {}
 
@@ -192,6 +195,10 @@ def setup():
                     done BOOLEAN NOT NULL DEFAULT(FALSE),
                     prev INTEGER DEFAULT (NULL),
                     next INTEGER DEFAULT (NULL)
+                  );""")
+    s.execute("""CREATE TABLE IF NOT EXISTS PreviousItems (
+                    rowid INTEGER PRIMARY KEY,
+                    content TEXT
                   );""")
     # These would be unique, but that constraint is briefly violated during update.
     s.execute("""CREATE INDEX IF NOT EXISTS Items_next ON Items(next);""")

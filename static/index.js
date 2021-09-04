@@ -316,8 +316,8 @@ $(document).ready(function() {
     todo_rm(box);
   });
 
-  todoList.sortable();
   todoList.sortable({
+    axis: "y",
     update: function(_event, ui) {
       var new_index = ui.item.index();
       todo_move(ui.item, new_index);

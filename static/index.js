@@ -195,7 +195,7 @@ $(document).ready(function() {
     // id is prefixed with 'id-' to ensure no javascript integer parsing.
     var html =
       '<li data-id="id-' + todo.id + '" class="animated flipInX ' + cls + '">' +
-      '<div class="checkbox"><span class="close"><i class="fa fa-times"></i></span>' +
+      '<div class="checkbox"><span class="close"><i>X</i></span>' +
         '<label><span class="checkbox-mask"></span><input type="checkbox" />' +
         todo.content +
         '</label>' + 

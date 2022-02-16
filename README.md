@@ -1,5 +1,8 @@
 # todo-app
 
+# NOTE : NOT MAINTAINED
+# NOTE : Prefer https://github.com/VolatileDream/tasty-fare
+
 A small flask todo app.
 
 This mostly adds a single list backend to the original [Todost](http://todost.quentincolus.com/).
